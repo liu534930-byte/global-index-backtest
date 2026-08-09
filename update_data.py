@@ -47,21 +47,26 @@ def get_json(url: str, attempts: int = 3) -> dict:
 
 def yahoo_monthly(symbol: str) -> list[dict]:
     end = int((datetime.now(timezone.utc) + timedelta(days=3)).timestamp())
-    url = (
-        "https://query1.finance.yahoo.com/v8/finance/chart/"
-        f"{quote(symbol, safe='')}?period1=946684800&period2={end}&interval=1mo&events=history"
-    )
-    payload = get_json(url)
-    result = payload.get("chart", {}).get("result") or []
-    if not result:
-        raise RuntimeError(f"Yahoo returned no data for {symbol}")
-    chart = result[0]
-    closes = chart["indicators"]["quote"][0]["close"]
     points = {}
-    for stamp, close in zip(chart.get("timestamp", []), closes):
-        if isinstance(close, (int, float)) and close > 0:
-            month = datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m")
-            points[month] = round(float(close), 8)
+    for interval in ("1mo", "1d"):
+        url = (
+            "https://query1.finance.yahoo.com/v8/finance/chart/"
+            f"{quote(symbol, safe='')}?period1=946684800&period2={end}"
+            f"&interval={interval}&events=history"
+        )
+        payload = get_json(url)
+        result = payload.get("chart", {}).get("result") or []
+        if not result:
+            continue
+        chart = result[0]
+        closes = chart["indicators"]["quote"][0]["close"]
+        points = {}
+        for stamp, close in zip(chart.get("timestamp", []), closes):
+            if isinstance(close, (int, float)) and close > 0:
+                month = datetime.fromtimestamp(stamp, timezone.utc).strftime("%Y-%m")
+                points[month] = round(float(close), 8)
+        if len(points) >= 12:
+            break
     if len(points) < 12:
         raise RuntimeError(f"Yahoo returned insufficient data for {symbol}")
     time.sleep(0.35)
